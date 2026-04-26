@@ -1,24 +1,48 @@
-# Cautare numar de inmatriculare
+# Cautare numar inmatriculare
 
-M-am lovit de situatia de a dori sa imi inmatriculez masina cu un numar de forma CJXXABC. Pentru ca nu gaseam un numar care nu era deja luat am scris un bot care sa incerce toate combinatiile (1-99) si sa le salveze intr-un fisier.
+Aplicatie CLI care verifica automat disponibilitatea numerelor de inmatriculare romanesti de forma `B01RMS`, `B100RMS` etc. pentru un judet si un format date.
 
-Programul foloseste puppeteer pentru a naviga pe site-ul dgpci si a introduce toate combinatiile de numere. Pentru partea de captcha foloseste 2captcha, deci este necesar un api token.
+## Ce face
 
-Va salva combinatiile in db.json, un obiect de forma { "JJXXABC": "Gasit" | "X" }
+- genereaza toate combinatiile numerice pentru intervalul configurat
+- trimite cereri direct catre API-ul DGPCI
+- rezolva captcha prin 2captcha
+- salveaza rezultatele in `db.json`
+- reia verificarea fara sa repete numerele deja testate
+
+## Cerinte
+
+- Bun
+- un cont/serviciu 2captcha
+- variabilele de mediu din `.env.template`
 
 ## Rulare
 
-```bun --env-file .env index.ts```
-
-## Environment Variables (.env file)
-
-```
-judet=string (acronimul judetului e.g CJ)
-format=string (formatul numarului de inmatriculare de forma ABC)
-captcha-id=string (providerul captcha e.g 2captcha)
-captcha-token=string (tokenul providerului)
+```bash
+bun --env-file .env index.ts
 ```
 
-Programul a fost scris in Februarie 2025 si publicat in Decembrie 2025.
+## Configurare
 
-© 2025, Andrei Ranta | All rights reserved.
+Copiaza `.env.template` in `.env` si completeaza:
+
+```env
+judet=B
+format=RMS
+captcha-id=2captcha
+captcha-token=your_token_here
+```
+
+## Rezultate
+
+Rezultatele sunt salvate in `db.json` astfel:
+
+```json
+{
+  "B01RMS": "X",
+  "B47RMS": "GASIT"
+}
+```
+
+- `GASIT` = disponibil
+- `X` = ocupat

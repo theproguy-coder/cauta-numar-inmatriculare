@@ -108,17 +108,17 @@ async function checkPlate(plateNumber: string): Promise<"GASIT" | "X"> {
 
 await db.get();
 
-console.log(`Pornesc cautarea pentru ${county}XX${format} (01-99)...`);
+console.log(`Pornesc cautarea pentru ${county}XX/XXX${format} (01-999)...`);
 console.log(`API direct, fara browser.\n`);
 
-for (let i = 1; i <= 99; i++) {
+for (let i = 1; i <= 999; i++) {
     const number = `${county}${i.toString().padStart(2, "0")}${format}`;
     if (db.data[number]) {
-        console.log(`[${i}/99] ${number} — deja verificat (${db.data[number]}), sar peste.`);
+        console.log(`[${i}/999] ${number} — deja verificat (${db.data[number]}), sar peste.`);
         continue;
     }
 
-    console.log(`[${i}/99] Verific: ${number}`);
+    console.log(`[${i}/999] Verific: ${number}`);
     try {
         const result = await checkPlate(number);
         db.data[number] = result;

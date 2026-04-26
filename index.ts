@@ -1,5 +1,7 @@
 import fs from "fs/promises";
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 const county = process.env.judet!;
 const format = process.env.format!;
 const captchaToken = process.env["captcha-token"]!;

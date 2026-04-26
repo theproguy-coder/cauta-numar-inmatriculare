@@ -28,3 +28,10 @@ args = "bun --env-file .env index.ts"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[userenv]
+
+[userenv.shared]
+judet = "B"
+format = "RMS"
+captcha-id = "2captcha"

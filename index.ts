@@ -32,8 +32,14 @@ puppeteer.use(
 );
 
 const browser = await puppeteer.launch({
-    headless: false, 
-    args: [`--window-size=1080,920`],
+    headless: true,
+    args: [
+        `--window-size=1080,920`,
+        `--no-sandbox`,
+        `--disable-setuid-sandbox`,
+        `--disable-dev-shm-usage`,
+        `--disable-gpu`
+    ],
     defaultViewport: { width: 1080, height: 920 }
 });
 

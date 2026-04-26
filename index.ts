@@ -1,87 +1,144 @@
-import puppeteer from "puppeteer-extra";
-import RecaptchaPlugin from "puppeteer-extra-plugin-recaptcha";
 import fs from "fs/promises";
 
 const county = process.env.judet!;
 const format = process.env.format!;
-const captchaId = process.env["captcha-id"]!;
 const captchaToken = process.env["captcha-token"]!;
+
+const SITE_KEY = "6Le9UwsUAAAAAGR_XRglppXV_ZTRjQOcPPyz7dxA";
+const PAGE_URL = "https://dgpci.mai.gov.ro/drpciv-forms/plate-number";
+const API_URL = "https://dgpci.mai.gov.ro/drpciv-forms-api/plate-status";
+const CAPTCHA_SUBMIT_URL = "https://2captcha.com/in.php";
+const CAPTCHA_RESULT_URL = "https://2captcha.com/res.php";
+const USER_EMAIL = "check@check.com";
 
 const db = {
     async save() {
         await fs.writeFile("db.json", JSON.stringify(this.data, undefined, 4));
     },
-
     async get() {
-        this.data = JSON.parse(await fs.readFile("db.json", "utf-8"));
+        try {
+            this.data = JSON.parse(await fs.readFile("db.json", "utf-8"));
+        } catch {
+            this.data = {};
+        }
     },
-
     data: {} as Record<string, "GASIT" | "X">
 };
 
+async function solveCaptcha(): Promise<string> {
+    console.log("  → Trimit captcha la 2captcha...");
+
+    const submitRes = await fetch(CAPTCHA_SUBMIT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+            key: captchaToken,
+            method: "userrecaptcha",
+            googlekey: SITE_KEY,
+            pageurl: PAGE_URL,
+            json: "1"
+        })
+    });
+    const submitData = await submitRes.json() as any;
+
+    if (submitData.status !== 1) {
+        throw new Error(`2captcha submit error: ${JSON.stringify(submitData)}`);
+    }
+    const requestId = submitData.request;
+    console.log(`  → Captcha trimis (id: ${requestId}), astept rezultat...`);
+
+    for (let attempt = 0; attempt < 30; attempt++) {
+        await new Promise(r => setTimeout(r, 5000));
+
+        const resultRes = await fetch(
+            `${CAPTCHA_RESULT_URL}?key=${captchaToken}&action=get&id=${requestId}&json=1`
+        );
+        const resultData = await resultRes.json() as any;
+
+        if (resultData.status === 1) {
+            console.log("  → Captcha rezolvat!");
+            return resultData.request;
+        }
+        if (resultData.request !== "CAPCHA_NOT_READY") {
+            throw new Error(`2captcha error: ${JSON.stringify(resultData)}`);
+        }
+        console.log(`  → Inca astept captcha (incercarea ${attempt + 1}/30)...`);
+    }
+
+    throw new Error("Timeout: captcha nu a fost rezolvat in 150s");
+}
+
+async function checkPlate(plateNumber: string): Promise<"GASIT" | "X"> {
+    const captchaKey = await solveCaptcha();
+
+    const res = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://dgpci.mai.gov.ro",
+            "Referer": "https://dgpci.mai.gov.ro/drpciv-forms/plate-number"
+        },
+        body: JSON.stringify({
+            plateNumber,
+            userEmail: USER_EMAIL,
+            language: "RO",
+            reCaptchaKey: captchaKey
+        })
+    });
+
+    const data = await res.json() as any;
+    console.log(`  → Raspuns API: ${JSON.stringify(data)}`);
+
+    if (data.errMessage) {
+        throw new Error(`API error: ${data.errMessage}`);
+    }
+
+    const code = (data.code ?? "").toLowerCase();
+    const message = (data.message ?? "").toLowerCase();
+
+    if (code === "available" || message.includes("disponibil") && !message.includes("nu este")) {
+        return "GASIT";
+    } else {
+        return "X";
+    }
+}
+
 await db.get();
 
-puppeteer.use(
-    RecaptchaPlugin({
-        provider: {
-            id: captchaId,
-            token: captchaToken
-        },
-        visualFeedback: true
-    })
-);
-
-const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-        `--window-size=1080,920`,
-        `--no-sandbox`,
-        `--disable-setuid-sandbox`,
-        `--disable-dev-shm-usage`,
-        `--disable-gpu`
-    ],
-    defaultViewport: { width: 1080, height: 920 }
-});
-
-const page = await browser.newPage();
+console.log(`Pornesc cautarea pentru ${county}XX${format} (01-99)...`);
+console.log(`API direct, fara browser.\n`);
 
 for (let i = 1; i <= 99; i++) {
     const number = `${county}${i.toString().padStart(2, "0")}${format}`;
-    if (db.data[number]) continue;
-    console.log(`Incercam cu: ${number}`);
-
-    await page.goto("https://dgpci.mai.gov.ro/drpciv-forms/plate-number");
-
-    await new Promise(resolve => setTimeout(resolve, 4000));
-    await page.mouse.wheel({ deltaY: 600 });
-    
-    const input = await page.waitForSelector("#plateNumber");
-    if (!input) throw new Error("Nu am gasit input-ul");
-
-    const submit = await page.waitForSelector(`.field-submit`).then(e => e?.$("button"));
-    if (!submit) throw new Error("Nu am gasit submit-ul");
-    
-    input.type(number);
-    
-    const captchaRes = await page.solveRecaptchas()
-    console.log(captchaRes);
-
-    await submit.click();
-    
-    const result = await page.waitForSelector("#stateMatriculation");
-    if (!result) throw new Error("Nu am gasit result-ul");
-
-    const res = await page.evaluate(e => e.textContent, result);
-    if (!res) throw new Error("Nu am gasit res-ul");
-    if (res.includes("nu este disponibil")) {
-        db.data[number] = "X";
-    } else if (res.includes("este disponibil")) {
-        db.data[number] = "GASIT";
-    } else {
-        throw new Error("Nu am putut citi res-ul");
+    if (db.data[number]) {
+        console.log(`[${i}/99] ${number} — deja verificat (${db.data[number]}), sar peste.`);
+        continue;
     }
 
-    await db.save();
+    console.log(`[${i}/99] Verific: ${number}`);
+    try {
+        const result = await checkPlate(number);
+        db.data[number] = result;
+        await db.save();
+
+        if (result === "GASIT") {
+            console.log(`  ✓ ${number} — DISPONIBIL!\n`);
+        } else {
+            console.log(`  ✗ ${number} — ocupat.\n`);
+        }
+    } catch (err: any) {
+        console.error(`  ! Eroare la ${number}: ${err.message}`);
+        await new Promise(r => setTimeout(r, 3000));
+    }
 }
 
-process.on("exit", () => browser.close());
+console.log("\nGata! Rezultate salvate in db.json.");
+const available = Object.entries(db.data)
+    .filter(([, v]) => v === "GASIT")
+    .map(([k]) => k);
+if (available.length > 0) {
+    console.log(`Numere disponibile: ${available.join(", ")}`);
+} else {
+    console.log("Niciun numar disponibil gasit.");
+}

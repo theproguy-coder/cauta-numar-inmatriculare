@@ -432,6 +432,4 @@ Accepta orice string care trece validarea sintactica de email pe server. Nu este
 
 ---
 
-Programul a fost scris in Februarie 2025 si publicat in Decembrie 2025.
-
-© 2025, Andrei Ranta | All rights reserved.
+Programul a fost scris in Februarie 2025 si publicat in Decembrie 2025 de catre Andrei Ranta, actualizat si imbunatatit in Aprilie 2026 de RMS.
